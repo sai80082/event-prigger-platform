@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Event Trigger Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="container mx-auto bg-white shadow-md rounded-lg p-6">
+        <h1 class="text-2xl font-bold mb-6">Event Trigger Management</h1>
+        
+        <div class="grid md:grid-cols-2 gap-6">
+            <div>
+                <h2 class="text-lg font-semibold mb-4">Create Trigger</h2>
+                <form id="triggerForm" class="space-y-4">
+                    <input type="text" placeholder="Trigger Name" class="w-full p-2 border rounded">
+                    
+                    <select id="triggerType" class="w-full p-2 border rounded">
+                        <option value="">Select Trigger Type</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="api">API</option>
+                    </select>
+
+                    <div id="scheduledOptions" class="hidden">
+                        <select class="w-full p-2 border rounded mb-2">
+                            <option>Trigger Frequency</option>
+                            <option>One-time in 10 minutes</option>
+                            <option>Every 30 minutes</option>
+                        </select>
+                    </div>
+
+                    <div id="apiOptions" class="hidden">
+                        <textarea placeholder="API Payload Schema" class="w-full p-2 border rounded" rows="3"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+                        Create Trigger
+                    </button>
+                </form>
+            </div>
+            
+            <div>
+                <h2 class="text-lg font-semibold mb-4">Recent Events (Last 2 Hours)</h2>
+                <div class="overflow-y-auto max-h-96">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-200">
+                                <th class="p-2 text-left">Timestamp</th>
+                                <th class="p-2 text-left">Type</th>
+                                <th class="p-2 text-left">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b">
+                                <td class="p-2">2024-01-24 10:15:23</td>
+                                <td class="p-2">Scheduled</td>
+                                <td class="p-2">Daily report trigger</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex space-x-2">
+                    <button class="flex-1 bg-gray-300 p-2 rounded">Recent Events</button>
+                    <button class="flex-1 bg-gray-300 p-2 rounded">Archived Events</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Toggle trigger type options
+        document.getElementById('triggerType').addEventListener('change', function() {
+            const scheduledOptions = document.getElementById('scheduledOptions');
+            const apiOptions = document.getElementById('apiOptions');
+            
+            scheduledOptions.classList.add('hidden');
+            apiOptions.classList.add('hidden');
+
+            if (this.value === 'scheduled') {
+                scheduledOptions.classList.remove('hidden');
+            } else if (this.value === 'api') {
+                apiOptions.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
