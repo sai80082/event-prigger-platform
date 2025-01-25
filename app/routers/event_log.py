@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, logger
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import EventLog
@@ -6,11 +6,10 @@ from app.schemas import EventLogResponse
 import datetime
 import json
 
+from app.cache import cache_client
 router = APIRouter()
 
-from pymemcache.client.base import Client
 
-cache_client = Client(('127.0.0.1', 11211))
 
 def cache_key_for_recent_logs():
     """
@@ -43,24 +42,28 @@ def deserialize_logs(cached_data):
     return [EventLogResponse(**log) for log in json.loads(cached_data)]
 
 @router.get("/", response_model=list[EventLogResponse])
-def get_recent_logs(db: Session = Depends(get_db)):
+async def get_recent_logs(db: Session = Depends(get_db)):
     """
     Fetch event logs from the last 2 hours with caching.
     """
     cache_key = cache_key_for_recent_logs()
-    cached_logs = cache_client.get(cache_key)
+    try:
+        cached_logs = await cache_client.get(cache_key)
+        if cached_logs:
+            return deserialize_logs(cached_logs)
+    except Exception as e:
+        logger.warning(f"Cache read failed: {str(e)}")
 
-    if cached_logs:
-        # If cached data is found, deserialize and return it
-        return deserialize_logs(cached_logs)
-
-    # If no cache, query the database
+    # Database fallback
     two_hours_ago = datetime.datetime.utcnow() - datetime.timedelta(hours=2)
     logs = db.query(EventLog).filter(EventLog.triggered_at >= two_hours_ago).all()
     response_logs = [EventLogResponse.from_orm(log) for log in logs]
 
-    # Cache the result for 5 minutes
-    cache_client.set(cache_key, serialize_logs(response_logs), expire=300)
+    # Try to cache but don't block if it fails
+    try:
+        await cache_client.set(cache_key, serialize_logs(response_logs), expire=300)
+    except Exception as e:
+        logger.warning(f"Cache write failed: {str(e)}")
 
     return response_logs
 

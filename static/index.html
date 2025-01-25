@@ -22,7 +22,10 @@
                     </select>
 
                     <div id="scheduledOptions" class="hidden">
-                        <input type="datetime-local" name="schedule" class="w-full p-2 border rounded mb-2">
+                        <input type="datetime-local" 
+                               name="schedule" 
+                               class="w-full p-2 border rounded mb-2" 
+                               step="1">
                         <label class="block mb-2">
                             <input type="checkbox" name="is_recurring"> Recurring
                         </label>
@@ -33,9 +36,14 @@
                         <textarea name="payload" placeholder="API Payload Schema (JSON)" class="w-full p-2 border rounded" rows="3"></textarea>
                     </div>
 
-                    <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
-                        Create Trigger
-                    </button>
+                    <div class="flex space-x-2">
+                        <button type="submit" class="flex-1 bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+                            Create Trigger
+                        </button>
+                        <button type="button" id="testTrigger" class="flex-1 bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600">
+                            Test Trigger
+                        </button>
+                    </div>
                 </form>
             </div>
             
@@ -61,6 +69,30 @@
             </div>
         </div>
         
+        <div class="mt-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">Test Triggers</h2>
+                <button id="refreshTestTriggers" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+                    Refresh Test Triggers
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2 text-left">Name</th>
+                            <th class="p-2 text-left">Type</th>
+                            <th class="p-2 text-left">Schedule</th>
+                            <th class="p-2 text-left">Recurring</th>
+                            <th class="p-2 text-left">Interval (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="testTriggersTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="mt-8">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-semibold">All Triggers</h2>
@@ -98,7 +130,10 @@
                     </select>
 
                     <div id="editScheduledOptions">
-                        <input type="datetime-local" name="schedule" class="w-full p-2 border rounded mb-2">
+                        <input type="datetime-local" 
+                               name="schedule" 
+                               class="w-full p-2 border rounded mb-2" 
+                               step="1">
                         <label class="block mb-2">
                             <input type="checkbox" name="is_recurring"> Recurring
                         </label>
@@ -368,6 +403,65 @@
                 apiOptions.classList.remove('hidden');
             }
         }
+
+        // Add these new functions
+        async function loadTestTriggers() {
+            try {
+                const response = await fetch('/triggers/test/');
+                const triggers = await handleApiResponse(response, 'Test triggers loaded successfully');
+                
+                const tbody = document.getElementById('testTriggersTableBody');
+                tbody.innerHTML = triggers.map(trigger => `
+                    <tr class="border-b">
+                        <td class="p-2">${trigger.name}</td>
+                        <td class="p-2">${trigger.trigger_type}</td>
+                        <td class="p-2">${trigger.schedule ? new Date(trigger.schedule).toLocaleString() : '-'}</td>
+                        <td class="p-2">${trigger.is_recurring ? 'Yes' : 'No'}</td>
+                        <td class="p-2">${trigger.interval_seconds || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function createTestTrigger(formData) {
+            const data = {
+                name: formData.get('name'),
+                trigger_type: formData.get('trigger_type'),
+                is_recurring: formData.get('is_recurring') === 'on',
+                schedule: formData.get('schedule') ? new Date(formData.get('schedule')).toISOString() : null,
+                interval_seconds: parseInt(formData.get('interval_seconds')) || null,
+                payload: formData.get('payload') || '{}'
+            };
+
+            const response = await fetch('/triggers/test/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            await handleApiResponse(response, 'Test trigger created successfully');
+            loadTestTriggers();
+        }
+
+        // Add event listener for test trigger button
+        document.getElementById('testTrigger').addEventListener('click', async function(e) {
+            e.preventDefault();
+            const form = document.getElementById('triggerForm');
+            const formData = new FormData(form);
+            try {
+                await createTestTrigger(formData);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+
+        // Add event listener for refresh test triggers button
+        document.getElementById('refreshTestTriggers').addEventListener('click', loadTestTriggers);
+
+        // Add to initial load
+        loadTestTriggers();
     </script>
 </body>
 </html>

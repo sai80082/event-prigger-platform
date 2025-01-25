@@ -1,3 +1,5 @@
+import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db import get_db
@@ -6,8 +8,30 @@ from app.schemas import TriggerCreate, TriggerUpdate, TriggerResponse
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 from app.trigger_scheduler import scheduler 
+from app.cache import cache_client
+from json import dumps, loads
+from typing import Optional
+import uuid
+import random
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+def generate_test_id() -> int:
+    return -random.randint(1,100)
+
+def serialize_trigger(trigger: Trigger, test_id: Optional[int] = None) -> dict:
+    return {
+        "id": test_id or generate_test_id(),
+        "name": trigger.name,
+        "trigger_type": trigger.trigger_type,
+        "schedule": trigger.schedule.isoformat() if trigger.schedule else None,
+        "interval_seconds": trigger.interval_seconds,
+        "is_recurring": trigger.is_recurring,
+        "payload": trigger.payload,
+        "created_at": datetime.utcnow().isoformat()
+    }
 
 @router.post("/", response_model=TriggerResponse)
 async def create_trigger(trigger: TriggerCreate, db: Session = Depends(get_db)):
@@ -42,32 +66,70 @@ async def create_trigger(trigger: TriggerCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Error creating trigger")
 
 @router.post("/test/", response_model=TriggerResponse)
-def test_trigger(trigger: TriggerCreate, db: Session = Depends(get_db)):
+async def test_trigger(trigger: TriggerCreate, db: Session = Depends(get_db)):
     try:
-        # Create a new Trigger instance
         new_trigger = Trigger(
             name=trigger.name,
-            trigger_type=trigger.trigger_type,
+            trigger_type=trigger.trigger_type, 
             schedule=trigger.schedule,
             interval_seconds=trigger.interval_seconds,
             is_recurring=trigger.is_recurring,
             payload=trigger.payload,
         )
         
-        # Validate the trigger
         try:
             new_trigger.validate_trigger()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        
+            
         try:
-            scheduler.add_trigger(new_trigger,test=True)
+            test_id = generate_test_id()
+
+            new_trigger.id = test_id
+            await scheduler.add_trigger(new_trigger, test=True)
+            
+            # Cache test trigger
+            trigger_data = serialize_trigger(new_trigger, test_id)
+            
+            # Get existing test triggers
+            cached_triggers = await cache_client.get("test_triggers")
+            test_triggers = loads(cached_triggers) if cached_triggers else []
+            test_triggers.append(trigger_data)
+            
+            # Update cache with 1 hour expiration
+            await cache_client.set("test_triggers", dumps(test_triggers), expire=3600)
+            
+            # Set individual trigger cache
+            await cache_client.set(f"test_trigger:{test_id}", dumps(trigger_data), expire=3600)
+            
+            
+            return new_trigger
+            
         except ValueError as e:
             raise HTTPException(status_code=501, detail=str(e))
-        return new_trigger
+            
     except SQLAlchemyError:
         raise HTTPException(status_code=500, detail="Error creating trigger")
 
+@router.get("/test/", response_model=list[TriggerResponse])
+async def get_test_triggers():
+    """Get all test triggers from cache"""
+    try:
+        test_triggers = await cache_client.get("test_triggers")
+        if not test_triggers:
+            return []
+        
+        # Handle bytes/string conversion
+        if isinstance(test_triggers, bytes):
+            test_triggers = test_triggers.decode('utf-8')
+            
+        return loads(test_triggers)
+    except (TypeError, ValueError, json.JSONDecodeError) as e:
+        logger.error(f"Error deserializing test triggers: {str(e)}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error getting test triggers: {str(e)}")
+        return []
 
 @router.get("/", response_model=list[TriggerResponse])
 def get_all_triggers(db: Session = Depends(get_db)):
