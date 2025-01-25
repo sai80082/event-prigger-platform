@@ -32,6 +32,8 @@ from datetime import datetime
 class EventLogResponse(BaseModel):
     id: int
     trigger_id: int
+    name: str
+    trigger_type: str
     triggered_at: datetime
     payload: str
     is_test: bool

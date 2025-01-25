@@ -11,7 +11,7 @@ class Trigger(Base):
     __tablename__ = "triggers"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True, nullable=False,unique=True)
+    name = Column(String, index=True, nullable=False)
     trigger_type = Column(String, nullable=False)  # "scheduled" or "api"
     
     # For scheduled triggers
@@ -64,5 +64,7 @@ class EventLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     trigger_id = Column(Integer, ForeignKey("triggers.id"))
     triggered_at = Column(DateTime, default=datetime.datetime.utcnow)
+    trigger_type = Column(String, nullable=False)
+    name = Column(String, nullable=False)
     payload = Column(String, nullable=True)  # Stores payload for API triggers
     is_test = Column(Boolean, default=False)
