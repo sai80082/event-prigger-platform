@@ -20,6 +20,6 @@ COPY . .
 
 # Expose the port that FastAPI will run on
 EXPOSE 8000
-
+RUN python /app/initialize_db.py
 # Start both Memcached and FastAPI application
-CMD ["sh", "-c", "memcached -u memcache -m 64 -p 11211 -l 0.0.0.0 & uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "memcached -u memcache -m 64 -p 11211 -l 0.0.0.0 & uvicorn app.main:app --host 0.0.0.0 --port 8000"]

@@ -53,9 +53,13 @@
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="bg-gray-200">
-                                <th class="p-2 text-left">Timestamp</th>
+                                <th class="p-2 text-left">Name</th>
                                 <th class="p-2 text-left">Type</th>
-                                <th class="p-2 text-left">Details</th>
+                                <th class="p-2 text-left">payload</th>
+                                <th class="p-2 text-left">Timestamp (UTC)</th>
+                                <th class="p-2 text-left">Test</th>
+                                
+                               
                             </tr>
                         </thead>
                         <tbody id="eventsTableBody">
@@ -266,9 +270,13 @@
                 const tbody = document.getElementById('eventsTableBody');
                 tbody.innerHTML = events.map(event => `
                     <tr class="border-b">
-                        <td class="p-2">${new Date(event.triggered_at).toLocaleString()}</td>
-                        <td class="p-2">${event.trigger_type}</td>
                         <td class="p-2">${event.name}</td>
+                        <td class="p-2">${event.trigger_type}</td>
+                        <td class="p-2">${event.payload}</td>
+                        <td class="p-2">${new Date(event.triggered_at).toLocaleString()}</td>
+                        <td class="p-2">${event.is_test}</td>
+                        
+                        
                     </tr>
                 `).join('');
             } catch (error) {
