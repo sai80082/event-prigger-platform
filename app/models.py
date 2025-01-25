@@ -34,7 +34,8 @@ class Trigger(Base):
             # Check if it's recurring
             if self.is_recurring and not self.interval_seconds:
                 raise ValueError("Recurring triggers must have 'interval_seconds' defined.")
-            
+            if not self.is_recurring and not self.schedule:
+                raise ValueError("Scheduled triggers must have 'schedule' or recurring enabled.")
             # Check schedule if it exists
             if self.schedule:
                 now = datetime.datetime.now(datetime.timezone.utc)

@@ -39,4 +39,4 @@ class EventLogResponse(BaseModel):
     is_test: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True

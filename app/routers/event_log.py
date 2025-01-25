@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pymemcache.client.base import Client
 from app.db import get_db
 from app.models import EventLog
 from app.schemas import EventLogResponse
@@ -9,8 +8,9 @@ import json
 
 router = APIRouter()
 
-# Memcached client
-cache_client = Client(('localhost', 11211))
+from pymemcache.client.base import Client
+
+cache_client = Client(('127.0.0.1', 11211))
 
 def cache_key_for_recent_logs():
     """
@@ -26,9 +26,15 @@ def cache_key_for_archived_logs():
 
 def serialize_logs(logs):
     """
-    Serialize logs to JSON for caching.
+    Serialize logs to JSON for caching, handling datetime objects.
     """
-    return json.dumps([log.dict() for log in logs])
+    def custom_serializer(obj):
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()  # Convert datetime to ISO 8601 string
+        raise TypeError(f"Type {type(obj)} not serializable")
+
+    return json.dumps([log.dict() for log in logs], default=custom_serializer)
+
 
 def deserialize_logs(cached_data):
     """
