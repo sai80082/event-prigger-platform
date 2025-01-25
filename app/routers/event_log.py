@@ -61,19 +61,19 @@ async def get_recent_logs(db: Session = Depends(get_db)):
 
     # Try to cache but don't block if it fails
     try:
-        await cache_client.set(cache_key, serialize_logs(response_logs), expire=300)
+        await cache_client.set(cache_key, serialize_logs(response_logs), expire=10)
     except Exception as e:
         logger.warning(f"Cache write failed: {str(e)}")
 
     return response_logs
 
 @router.get("/archived", response_model=list[EventLogResponse])
-def get_archived_logs(db: Session = Depends(get_db)):
+async def get_archived_logs(db: Session = Depends(get_db)):
     """
     Fetch archived event logs (older than 2 hours) with caching.
     """
     cache_key = cache_key_for_archived_logs()
-    cached_logs = cache_client.get(cache_key)
+    cached_logs = await cache_client.get(cache_key)
 
     if cached_logs:
         # If cached data is found, deserialize and return it
@@ -85,6 +85,6 @@ def get_archived_logs(db: Session = Depends(get_db)):
     response_logs = [EventLogResponse.from_orm(log) for log in logs]
 
     # Cache the result for 10 minutes
-    cache_client.set(cache_key, serialize_logs(response_logs), expire=600)
+    await cache_client.set(cache_key, serialize_logs(response_logs), expire=600)
 
     return response_logs
