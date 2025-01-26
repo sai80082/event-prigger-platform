@@ -24,6 +24,8 @@ docker run -p 8000:8000 ghcr.io/sai80082/segwise
 2. **Install Dependencies and Run the Application**
    Ensure Docker is installed on your machine.
    ```bash
+   python -m venv venv
+   source venv/bin/activate
    pip install -r requirements.txt
    fastapi dev app
    ```
@@ -38,6 +40,14 @@ docker run -p 8000:8000 ghcr.io/sai80082/segwise
 
 ---
 
+## Testing the application
+
+You can run the tests for triggers using the following command:
+```bash
+PYTHONPATH=$(pwd) pytest tests/trigger_Test.py
+```
+
+---
 ## API Documentation
 
 ### Trigger Management
@@ -289,6 +299,7 @@ curl -X 'POST' \
 ```
 ## Assumption
  - I have assumed the api endpoint for testing the trigger as Discord webhook.you can set that using the env variable `HTTP_URL`.
+ - The cache duration for statistics is set to 5 minutes to avoid frequent database queries, as fetching statistics for every trigger can be resource-intensive.
 
 ---
 
