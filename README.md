@@ -27,7 +27,6 @@ docker run -p 8000:8000 ghcr.io/sai80082/segwise
    ```
 
 2. **Install Dependencies and Run the Application**
-   Ensure Docker is installed on your machine.
    ```bash
    python -m venv venv
    source venv/bin/activate
