@@ -3,6 +3,9 @@
 Built using FastAPI for the API, Memcached for caching, and SQLite for the database.
 
 ## Deployment
+
+CI/CD is implemented using GitHub Actions. On every push to the main branch, the pipeline builds a Docker image and pushes it to the ghcr.io registry. Once the image is ready, it is automatically pulled and updated on the server.
+
 Deployed on Oracle Free Tier: [Live Application](https://uwggw4c8408ckwgkc004cw04.host.saicharang.in)  
 For API documentation: [Swagger Docs](https://uwggw4c8408ckwgkc004cw04.host.saicharang.in/docs)
 
