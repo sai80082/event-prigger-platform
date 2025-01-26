@@ -1,4 +1,4 @@
-from app.db import engine, Base
+from app.services.db import engine, Base
 from app.models import Trigger,EventLog
 
 def initialize_database():

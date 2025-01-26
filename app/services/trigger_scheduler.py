@@ -1,20 +1,37 @@
 import json
 import logging
+import os
 from typing import Dict, Any, Optional
+import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timedelta
 import asyncio
-from app.cache import cache_client
 
-from app.db import SessionLocal
+import requests
+from fastapi.security import OAuth2
+from app.services.cache import cache_client
+
+from app.services.db import SessionLocal
 from app.models import EventLog, Trigger
 from app.schemas import TriggerCreate
 
+url = os.getenv("HTTP_URL")
+
+# Configure a more streamlined logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(levelname)s: %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+
 class TriggerScheduler:
     """Advanced scheduler for managing and executing triggers."""
-    _instance: Optional['TriggerScheduler'] = None
+
+    _instance: Optional["TriggerScheduler"] = None
 
     @classmethod
     def get_instance(cls):
@@ -24,53 +41,46 @@ class TriggerScheduler:
         return cls._instance
 
     def __init__(self):
-        if hasattr(self, '_initialized'):
+        if hasattr(self, "_initialized"):
             return
-        
+
         self.scheduler = AsyncIOScheduler()
         self.active_jobs: Dict[int, Dict[str, Any]] = {}
-        self._logger = logging.getLogger(__name__)
         self._initialized = True
 
     async def add_trigger(self, trigger: TriggerCreate, test: bool = False):
         """
         Add a new trigger to the scheduler with optional test mode.
-        
+
         :param trigger: Trigger object with scheduling details
         :param test: Flag to indicate if this is a test trigger
         """
         try:
             job_id = str(trigger.id)
-            
-            # Remove existing job if it exists
+
             if job_id in self.active_jobs:
                 self.remove_trigger(trigger.id)
-            
-            # Create appropriate trigger
+
             job_trigger = None
-            if trigger.trigger_type == 'scheduled':
+            if trigger.trigger_type == "scheduled":
                 if trigger.is_recurring:
                     job_trigger = IntervalTrigger(seconds=trigger.interval_seconds)
                 elif trigger.schedule:
-                    # Safely handle schedule string
                     if isinstance(trigger.schedule, str):
                         job_trigger = CronTrigger.from_crontab(trigger.schedule)
                     elif isinstance(trigger.schedule, datetime):
-                        # Convert datetime to cron-like string if needed
                         job_trigger = CronTrigger(
                             year=trigger.schedule.year,
                             month=trigger.schedule.month,
                             day=trigger.schedule.day,
                             hour=trigger.schedule.hour,
-                            minute=trigger.schedule.minute
+                            minute=trigger.schedule.minute,
                         )
-            
-            # Handle API triggers
-            if trigger.trigger_type == 'api':
-                await self._handle_http_request(trigger.payload, test)
+
+            if trigger.trigger_type == "api":
+                await self._execute_trigger(trigger, test)
                 return
-            
-            # Schedule the job if a trigger is created
+
             if job_trigger:
                 job = self.scheduler.add_job(
                     self._execute_trigger,
@@ -79,60 +89,84 @@ class TriggerScheduler:
                     args=[trigger, test],
                     max_instances=1,
                     misfire_grace_time=None,
-                    coalesce=True
+                    coalesce=True,
                 )
-                
-                # Store job details
+
                 self.active_jobs[trigger.id] = {
-                    'job': job,
-                    'trigger': trigger,
-                    'is_test': test
+                    "job": job,
+                    "trigger": trigger,
+                    "is_test": test,
                 }
-            
+
         except Exception as e:
-            log_method = self._logger.debug if test else self._logger.error
+            log_method = logger.debug if test else logger.error
             log_method(f"{'Test ' if test else ''}Trigger scheduling failed: {e}")
-        
-    async def _handle_http_request(self, payload, test):
-        """Handle HTTP request payload."""
-        import aiohttp
-        
-        url = payload.get('url')
-        method = payload.get('method', 'GET')
-        headers = payload.get('headers', {})
-        data = payload.get('data')
-        
+
+    async def _handle_http_request(
+        self, payload: Any, test: bool, trigger_id: int
+    ) -> Dict[str, Any]:
         try:
+            # Convert payload to dict if it's a string
+            payload_dict = json.loads(payload) if isinstance(payload, str) else payload
+
+            if test:
+                payload_dict = (
+                    {**payload_dict, "test": True}
+                    if isinstance(payload_dict, dict)
+                    else payload_dict
+                )
+
+            # Format payload for Discord webhook
+            formatted_payload = {
+                "content": (
+                    json.dumps(payload_dict)
+                    if isinstance(payload_dict, dict)
+                    else str(payload_dict)
+                )
+            }
+
+            headers = {"Content-Type": "application/json"}
+            logger.info(f"Sending webhook request: {formatted_payload}")
+
             async with aiohttp.ClientSession() as session:
-                async with session.request(method, url, headers=headers, json=data) as response:
-                    self._logger.info(f"HTTP Request to {url} completed with status {response.status}")
+                async with session.post(
+                    url, json=formatted_payload, headers=headers
+                ) as response:
+                    logger.info(f"Webhook response status: {response.status}")
+
+                    if response.status in [200, 204]:
+                        logger.info("Webhook message sent successfully")
+                        return {"success": True, "message": "Message sent successfully"}
+                    else:
+                        response_text = await response.text()
+                        logger.error(f"Webhook send failed: {response_text}")
+                        return {"success": False, "error": response_text}
+
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON payload: {je}")
+            return {"success": False, "error": str(je)}
         except Exception as e:
-            self._logger.error(f"HTTP Request failed: {e}")
+            logger.error(f"Webhook request error: {e}")
+            return {"success": False, "error": str(e)}
 
     async def _cleanup_test_trigger(self, trigger_id: int) -> bool:
         """Clean up test trigger from both cache and scheduler."""
         try:
-            # First clean up from cache
             test_triggers = await cache_client.get("test_triggers")
-            self._logger.debug(f"Fetched test_triggers: {test_triggers}")
             if test_triggers:
                 if isinstance(test_triggers, bytes):
-                    test_triggers = test_triggers.decode('utf-8')
+                    test_triggers = test_triggers.decode("utf-8")
                 triggers_list = json.loads(test_triggers)
-                self._logger.debug(f"Decoded test_triggers: {triggers_list}")
-                triggers_list = [t for t in triggers_list if t['id'] != trigger_id]
+                triggers_list = [t for t in triggers_list if t["id"] != trigger_id]
                 await cache_client.set("test_triggers", json.dumps(triggers_list))
-                self._logger.debug(f"Updated test_triggers: {triggers_list}")
-            
+
             await cache_client.delete(f"test_trigger:{trigger_id}")
-            self._logger.debug(f"Deleted cache entry for test_trigger:{trigger_id}")
-            self.remove_trigger(trigger_id)
-            # Then clean up from scheduler
+            logger.debug(f"Cleaned up test trigger {trigger_id}")
+
             return True
         except Exception as e:
-            self._logger.error(f"Failed to clean up test trigger {trigger_id}: {e}")
+            logger.error(f"Test trigger cleanup failed: {e}")
             return False
-
 
     async def _execute_trigger(self, trigger: TriggerCreate, test: bool = False):
         """Execute the trigger's payload."""
@@ -143,29 +177,33 @@ class TriggerScheduler:
                     trigger_type=trigger.trigger_type,
                     name=trigger.name,
                     payload=trigger.payload,
-                    is_test=test
+                    is_test=test,
                 )
-                
+
                 db.add(event_log)
                 db.commit()
-                
-                log_method = self._logger.debug if test else self._logger.info
-                log_method(f"{'Test ' if test else ''}Trigger {trigger.id} executed")
 
-                if test:
-                    await self._cleanup_test_trigger(trigger.id)
-                
+                logger.info(f"{'Test ' if test else ''}Trigger {trigger.id} executed")
+
+            if trigger.trigger_type == "api":
+                await self._handle_http_request(trigger.payload, test, trigger.id)
+
+            if test:
+                await self._cleanup_test_trigger(trigger.id)
+
+                self.remove_trigger(trigger.id)
+
         except Exception as e:
-            log_method = self._logger.warning if test else self._logger.error
+            log_method = logger.warning if test else logger.error
             log_method(f"{'Test ' if test else ''}Trigger {trigger.id} failed: {e}")
 
     def remove_trigger(self, trigger_id: int):
         """Remove a scheduled trigger."""
         if trigger_id in self.active_jobs:
-            job = self.active_jobs[trigger_id]['job']
+            job = self.active_jobs[trigger_id]["job"]
             job.remove()
             del self.active_jobs[trigger_id]
-            self._logger.info(f"Trigger {trigger_id} removed")
+            logger.info(f"Trigger {trigger_id} removed")
 
     def remove_old_logs(self):
         """Remove event logs older than 48 hours."""
@@ -174,43 +212,38 @@ class TriggerScheduler:
                 EventLog.triggered_at < datetime.utcnow() - timedelta(hours=48)
             ).delete()
             db.commit()
-        self._logger.info("Old logs removed")
+        logger.info("Old logs cleaned up")
 
     async def start(self):
         """Start the scheduler."""
         if not self.scheduler.running:
             self.scheduler.start()
             self.scheduler.add_job(
-                self.remove_old_logs, 
-                trigger=CronTrigger.from_crontab("*/5 * * * *")
+                self.remove_old_logs, trigger=CronTrigger.from_crontab("*/5 * * * *")
             )
-            
+
             with SessionLocal() as db:
                 to_schedule = db.query(Trigger).all()
                 for trigger in to_schedule:
                     await self.add_trigger(trigger)
-            
-            self._logger.info("Added older triggers and Scheduler started")
+
+            logger.info("Scheduler started with existing triggers")
 
     def shutdown(self):
         """Shutdown the scheduler gracefully."""
         if self.scheduler.running:
             self.scheduler.shutdown()
-            self._logger.info("Scheduler shutdown")
+            logger.info("Scheduler stopped")
 
-# Global scheduler instance
+
 scheduler = TriggerScheduler.get_instance()
+
 
 def initialize_scheduler():
     """Initialize and start the scheduler."""
     asyncio.create_task(scheduler.start())
 
+
 def shutdown_scheduler():
     """Shutdown the scheduler."""
     scheduler.shutdown()
-
-# Simplified logging configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s: %(message)s'
-)

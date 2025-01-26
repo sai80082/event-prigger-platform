@@ -75,6 +75,27 @@
         
         <div class="mt-8">
             <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">Event Statistics</h2>
+                <button id="refreshStats" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Refresh Stats
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2 text-left">Event Name</th>
+                            <th class="p-2 text-left">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-8">
+            <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-semibold">Test Triggers</h2>
                 <button id="refreshTestTriggers" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
                     Refresh Test Triggers
@@ -86,6 +107,7 @@
                         <tr class="bg-gray-200">
                             <th class="p-2 text-left">Name</th>
                             <th class="p-2 text-left">Type</th>
+                            <th class="p-2 text-left">Payload</th>
                             <th class="p-2 text-left">Schedule</th>
                             <th class="p-2 text-left">Recurring</th>
                             <th class="p-2 text-left">Interval (s)</th>
@@ -110,6 +132,7 @@
                         <tr class="bg-gray-200">
                             <th class="p-2 text-left">Name</th>
                             <th class="p-2 text-left">Type</th>
+                            <th class="p-2 text-left">Payload</th>
                             <th class="p-2 text-left">Schedule</th>
                             <th class="p-2 text-left">Recurring</th>
                             <th class="p-2 text-left">Interval (s)</th>
@@ -302,6 +325,7 @@
                     <tr class="border-b">
                         <td class="p-2">${trigger.name}</td>
                         <td class="p-2">${trigger.trigger_type}</td>
+                        <td class="p-2">${trigger.payload}</td>
                         <td class="p-2">${trigger.schedule ? new Date(trigger.schedule).toLocaleString() : '-'}</td>
                         <td class="p-2">${trigger.is_recurring ? 'Yes' : 'No'}</td>
                         <td class="p-2">${trigger.interval_seconds || '-'}</td>
@@ -365,7 +389,7 @@
             event.preventDefault();
             const form = event.target;
             const triggerId = form.triggerId.value;
-            
+            console.log(form.interval_seconds.value);
             const data = {
                 name: form.name.value,
                 trigger_type: form.trigger_type.value,
@@ -423,6 +447,7 @@
                     <tr class="border-b">
                         <td class="p-2">${trigger.name}</td>
                         <td class="p-2">${trigger.trigger_type}</td>
+                        <td class="p-2">${trigger.payload}</td>
                         <td class="p-2">${trigger.schedule ? new Date(trigger.schedule).toLocaleString() : '-'}</td>
                         <td class="p-2">${trigger.is_recurring ? 'Yes' : 'No'}</td>
                         <td class="p-2">${trigger.interval_seconds || '-'}</td>
@@ -470,6 +495,34 @@
 
         // Add to initial load
         loadTestTriggers();
+
+        // Add before the final 
+            
+        async function loadStats() {
+            try {
+                const response = await fetch('/event-logs/stats');
+                const stats = await handleApiResponse(response, 'Stats loaded successfully');
+                
+                const tbody = document.getElementById('statsTableBody');
+                tbody.innerHTML = stats.map(stat => `
+                    <tr class="border-b">
+                        <td class="p-2">${stat.name}</td>
+                        <td class="p-2">${stat.event_count}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        // Add event listener for refresh stats button
+        document.getElementById('refreshStats').addEventListener('click', loadStats);
+
+        // Auto refresh stats every 30 seconds
+        setInterval(loadStats, 30000);
+
+        // Add to initial load
+        loadStats();
     </script>
 </body>
 </html>
