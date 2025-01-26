@@ -1,5 +1,7 @@
 # Event Trigger Platform
 
+Built using FastAPI for the API, Memcached for caching, and SQLite for the database.
+
 ## Deployment
 Deployed on Oracle Free Tier: [Live Application](https://uwggw4c8408ckwgkc004cw04.host.saicharang.in)  
 For API documentation: [Swagger Docs](https://uwggw4c8408ckwgkc004cw04.host.saicharang.in/docs)
