@@ -43,9 +43,9 @@ class Trigger(Base):
                     json.loads(self.payload)
                 except json.JSONDecodeError:
                     raise ValueError("Payload must be valid JSON.")
-            if self.is_recurring and self.schedule:
+            if self.is_recurring or self.schedule:
                 raise ValueError(
-                    "Recurring triggers should not have a fixed 'schedule'."
+                    "API triggers must not have 'schedule' or recurring enabled."
                 )
 
 
