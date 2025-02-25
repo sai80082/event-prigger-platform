@@ -15,15 +15,15 @@ For API documentation: [Swagger Docs](https://uwggw4c8408ckwgkc004cw04.host.saic
 
 ### Using Docker
 ```bash
-docker run -p 8000:8000 ghcr.io/sai80082/segwise
+docker run -p 8000:8000 ghcr.io/sai80082/event-prigger-platform
 ```
 
 ### Without Docker
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/sai80082/segwise.git
-   cd segwise
+   git clone https://github.com/sai80082/event-prigger-platform.git
+   cd event-prigger-platform
    ```
 
 2. **Install Dependencies and Run the Application**
